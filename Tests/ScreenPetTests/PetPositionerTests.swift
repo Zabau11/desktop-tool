@@ -9,7 +9,7 @@ struct PetPositionerTests {
         let visibleFrame = CGRect(x: 0, y: 70, width: 1728, height: 1022)
         let origin = PetPositioner.panelOrigin(screenFrame: screenFrame, visibleFrame: visibleFrame)
 
-        #expect(origin.x == 808)
+        #expect(origin.x == 779)
         #expect(origin.y == 70)
         #expect(origin.y + PetLayout.petRect.minY == visibleFrame.minY + PetLayout.petBottomInset)
     }
@@ -26,7 +26,7 @@ struct PetPositionerTests {
         let negativeScreen = CGRect(x: -1920, y: -120, width: 1920, height: 1080)
         let negativeVisible = CGRect(x: -1920, y: -120, width: 1920, height: 1055)
         let origin = PetPositioner.panelOrigin(screenFrame: negativeScreen, visibleFrame: negativeVisible)
-        #expect(origin.x == -1016)
+        #expect(origin.x == -1045)
         #expect(origin.y == -120)
     }
 
@@ -35,7 +35,7 @@ struct PetPositionerTests {
         let frame = CGRect(x: 0, y: 0, width: 1440, height: 900)
         let visible = CGRect(x: 0, y: 0, width: 1440, height: 875)
         let origin = PetPositioner.panelOrigin(screenFrame: frame, visibleFrame: visible, horizontalOffset: 90)
-        #expect(origin.x == 754)
+        #expect(origin.x == 725)
         #expect(origin.y == 0)
     }
 }

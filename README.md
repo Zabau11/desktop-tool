@@ -18,11 +18,21 @@ swift run ScreenPet
 ScreenPet runs as a menu-bar accessory, so it does not appear in the Dock. Use
 the menu-bar control to hide or show the pet, or to quit the application.
 
+ScreenPet also shows temporary input diagnostics in a bubble above the pet:
+`Click detected` for mouse-button presses and `Space pressed` for physical
+Space key presses. The latest message remains visible briefly before fading.
+
+Global Space observation requires Accessibility access. At launch, ScreenPet
+requests permission if needed. If the prompt does not appear, enable ScreenPet
+manually in System Settings > Privacy & Security > Accessibility. The pet
+continues running if access is denied; click monitoring remains active where
+macOS permits it.
+
 ## Test
 
 ```sh
 swift test
 ```
 
-The prototype does not request Accessibility, Screen Recording, microphone, or
-network permissions.
+The prototype does not request Screen Recording, microphone, or network
+permissions.

@@ -7,11 +7,17 @@ final class PetView: NSView {
         bobOffset: 0,
         walkPhase: 0
     )
+    private var diagnosticMessage: String?
 
     override var isOpaque: Bool { false }
 
     func setAnimationState(_ state: PetAnimationState) {
         animationState = state
+        needsDisplay = true
+    }
+
+    func setDiagnosticMessage(_ message: String?) {
+        diagnosticMessage = message
         needsDisplay = true
     }
 
@@ -23,6 +29,27 @@ final class PetView: NSView {
 
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }
+
+        if let diagnosticMessage {
+            let bubble = NSBezierPath(
+                roundedRect: PetLayout.messageRect,
+                xRadius: 8,
+                yRadius: 8
+            )
+            NSColor(calibratedWhite: 1, alpha: 0.92).setFill()
+            bubble.fill()
+            NSColor(calibratedWhite: 0.15, alpha: 0.22).setStroke()
+            bubble.lineWidth = 1
+            bubble.stroke()
+
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 12, weight: .medium),
+                .foregroundColor: NSColor(calibratedWhite: 0.12, alpha: 1)
+            ]
+            let text = NSAttributedString(string: diagnosticMessage, attributes: attributes)
+            let textRect = PetLayout.messageRect.insetBy(dx: 8, dy: 2)
+            text.draw(in: textRect)
+        }
 
         let shadow = NSShadow()
         shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)

@@ -14,8 +14,9 @@ struct PetAnimationState: Equatable {
 }
 
 enum PetLayout {
-    static let panelSize = CGSize(width: 112, height: 58)
-    static let petRect = CGRect(x: 14, y: 10, width: 84, height: 44)
+    static let panelSize = CGSize(width: 170, height: 86)
+    static let petRect = CGRect(x: 43, y: 10, width: 84, height: 44)
+    static let messageRect = CGRect(x: 8, y: 61, width: 154, height: 20)
     static let petBottomInset: CGFloat = 10
     static let patrolDistance: CGFloat = 140
     static let patrolPeriod: TimeInterval = 8
@@ -24,6 +25,7 @@ enum PetLayout {
     static let walkCyclePeriod: TimeInterval = 0.72
     static let footSwing: CGFloat = 1.5
     static let directionVelocityThreshold: CGFloat = 0.01
+    static let messageDisplayDuration: TimeInterval = 1.2
 }
 
 enum PetMovement {

@@ -3,14 +3,19 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: OverlayWindowController?
+    private let inputMonitor = InputMonitor()
     private var statusItem: NSStatusItem?
     private var petMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installStatusItem()
+        inputMonitor.start()
 
         let overlayController = OverlayWindowController()
         self.overlayController = overlayController
+        inputMonitor.onMessage = { [weak overlayController] message in
+            overlayController?.showDiagnosticMessage(message)
+        }
         overlayController.setPetVisible(true)
 
         NotificationCenter.default.addObserver(
@@ -22,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        inputMonitor.stop()
         NotificationCenter.default.removeObserver(self)
     }
 
