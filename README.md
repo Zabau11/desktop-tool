@@ -1,8 +1,8 @@
 # ScreenPet
 
 A tiny native macOS proof of concept for a future desktop creature. The current
-version draws a stationary, click-through marker near the lower edge of the
-primary screen.
+version draws a click-through marker that gently patrols near the lower edge of
+the primary screen.
 
 ## Requirements
 
