@@ -5,13 +5,13 @@ final class OverlayWindowController {
     private let panel: NSPanel
     private var movementTimer: Timer?
     private var movementStartedAt: TimeInterval?
-    private var horizontalOffset: CGFloat = 0
+    private var animationState = PetMovement.animationState(elapsedTime: 0)
 
-    private(set) var isMarkerVisible = false
+    private(set) var isPetVisible = false
 
     init() {
         panel = NSPanel(
-            contentRect: CGRect(origin: .zero, size: MarkerLayout.panelSize),
+            contentRect: CGRect(origin: .zero, size: PetLayout.panelSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -30,11 +30,11 @@ final class OverlayWindowController {
             .stationary,
             .fullScreenAuxiliary
         ]
-        panel.contentView = MarkerView(frame: CGRect(origin: .zero, size: MarkerLayout.panelSize))
+        panel.contentView = PetView(frame: CGRect(origin: .zero, size: PetLayout.panelSize))
     }
 
-    func setMarkerVisible(_ visible: Bool) {
-        isMarkerVisible = visible
+    func setPetVisible(_ visible: Bool) {
+        isPetVisible = visible
 
         if visible {
             startMovement()
@@ -53,7 +53,7 @@ final class OverlayWindowController {
     private func startMovement() {
         guard movementTimer == nil else { return }
 
-        horizontalOffset = 0
+        animationState = PetMovement.animationState(elapsedTime: 0)
         movementStartedAt = ProcessInfo.processInfo.systemUptime
 
         let timer = Timer(
@@ -76,20 +76,24 @@ final class OverlayWindowController {
 
     @objc
     private func advanceMovement(_ timer: Timer) {
-        guard isMarkerVisible, let movementStartedAt else { return }
+        guard isPetVisible, let movementStartedAt else { return }
 
         let elapsedTime = ProcessInfo.processInfo.systemUptime - movementStartedAt
-        horizontalOffset = MarkerMovement.horizontalOffset(elapsedTime: elapsedTime)
+        animationState = PetMovement.animationState(
+            elapsedTime: elapsedTime,
+            previousFacingDirection: animationState.facingDirection
+        )
+        (panel.contentView as? PetView)?.setAnimationState(animationState)
         movePanel()
     }
 
     private func movePanel() {
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
 
-        let origin = MarkerPositioner.panelOrigin(
+        let origin = PetPositioner.panelOrigin(
             screenFrame: screen.frame,
             visibleFrame: screen.visibleFrame,
-            horizontalOffset: horizontalOffset
+            horizontalOffset: animationState.horizontalOffset
         )
         panel.setFrameOrigin(origin)
     }

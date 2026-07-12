@@ -1,7 +1,7 @@
 # ScreenPet
 
 A tiny native macOS proof of concept for a future desktop creature. The current
-version draws a click-through marker that gently patrols near the lower edge of
+version draws a click-through blob pet that gently patrols near the lower edge of
 the primary screen.
 
 ## Requirements
@@ -16,7 +16,7 @@ swift run ScreenPet
 ```
 
 ScreenPet runs as a menu-bar accessory, so it does not appear in the Dock. Use
-the menu-bar control to hide or show the marker, or to quit the application.
+the menu-bar control to hide or show the pet, or to quit the application.
 
 ## Test
 

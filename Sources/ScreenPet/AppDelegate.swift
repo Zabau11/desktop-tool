@@ -4,14 +4,14 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: OverlayWindowController?
     private var statusItem: NSStatusItem?
-    private var markerMenuItem: NSMenuItem?
+    private var petMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installStatusItem()
 
         let overlayController = OverlayWindowController()
         self.overlayController = overlayController
-        overlayController.setMarkerVisible(true)
+        overlayController.setPetVisible(true)
 
         NotificationCenter.default.addObserver(
             self,
@@ -39,14 +39,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
 
-        let markerMenuItem = NSMenuItem(
-            title: "Hide Marker",
-            action: #selector(toggleMarker(_:)),
+        let petMenuItem = NSMenuItem(
+            title: "Hide Pet",
+            action: #selector(togglePet(_:)),
             keyEquivalent: ""
         )
-        markerMenuItem.target = self
-        menu.addItem(markerMenuItem)
-        self.markerMenuItem = markerMenuItem
+        petMenuItem.target = self
+        menu.addItem(petMenuItem)
+        self.petMenuItem = petMenuItem
 
         menu.addItem(.separator())
 
@@ -62,12 +62,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc
-    private func toggleMarker(_ sender: Any?) {
+    private func togglePet(_ sender: Any?) {
         guard let overlayController else { return }
 
-        let shouldShow = !overlayController.isMarkerVisible
-        overlayController.setMarkerVisible(shouldShow)
-        markerMenuItem?.title = shouldShow ? "Hide Marker" : "Show Marker"
+        let shouldShow = !overlayController.isPetVisible
+        overlayController.setPetVisible(shouldShow)
+        petMenuItem?.title = shouldShow ? "Hide Pet" : "Show Pet"
     }
 
     @objc
