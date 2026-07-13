@@ -1,42 +1,72 @@
 import AppKit
 
 final class PetView: NSView {
-    private var animationState = PetAnimationState(
-        horizontalOffset: 0,
-        facingDirection: .right,
-        bobOffset: 0,
-        walkPhase: 0
-    )
-    private var diagnosticMessage: String?
+    private let animationEngine = PetAnimationEngine(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+    private var idleTimer: Timer?
+    private var frameTimer: Timer?
+    private var renderState = PetRenderState.neutral
 
     override var isOpaque: Bool { false }
 
-    func setAnimationState(_ state: PetAnimationState) {
-        animationState = state
-        needsDisplay = true
+    func startAnimations() {
+        stopAnimations()
+        animationEngine.reset()
+        scheduleIdleTimer()
     }
 
-    func setDiagnosticMessage(_ message: String?) {
-        diagnosticMessage = message
+    func stopAnimations() {
+        idleTimer?.invalidate()
+        frameTimer?.invalidate()
+        idleTimer = nil
+        frameTimer = nil
+        animationEngine.reset()
+        renderState = .neutral
         needsDisplay = true
     }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-
-        if let diagnosticMessage {
-            drawDiagnosticMessage(diagnosticMessage)
-        }
-
         drawSlime()
     }
 
-    private func drawSlime() {
-        let compression = abs(sin(animationState.walkPhase))
-        var rect = PetLayout.petRect.offsetBy(dx: 0, dy: animationState.bobOffset)
-        rect = rect.insetBy(dx: -compression * 1.2, dy: compression * 0.8)
-        rect.origin.y -= compression * 0.8
+    private func scheduleIdleTimer() {
+        idleTimer?.invalidate()
+        idleTimer = Timer.scheduledTimer(withTimeInterval: max(0.01, animationEngine.timeUntilNextEvent), repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.beginAnimationIfNeeded() }
+        }
+    }
 
+    private func beginAnimationIfNeeded() {
+        idleTimer = nil
+        animationEngine.advance(by: 0.001)
+        renderState = animationEngine.state
+        needsDisplay = true
+        guard animationEngine.isAnimating else { scheduleIdleTimer(); return }
+        frameTimer?.invalidate()
+        frameTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.advanceAnimationFrame() }
+        }
+    }
+
+    private func advanceAnimationFrame() {
+        animationEngine.advance(by: 1.0 / 30.0)
+        renderState = animationEngine.state
+        needsDisplay = true
+        if !animationEngine.isAnimating {
+            frameTimer?.invalidate()
+            frameTimer = nil
+            scheduleIdleTimer()
+        }
+    }
+
+    private func drawSlime() {
+        let baseRect = PetLayout.petRect
+        let rect = CGRect(
+            x: baseRect.midX - baseRect.width * renderState.bodyScaleX / 2,
+            y: baseRect.minY,
+            width: baseRect.width * renderState.bodyScaleX,
+            height: baseRect.height * renderState.bodyScaleY
+        )
         let body = slimeBodyPath(in: rect)
 
         NSGraphicsContext.saveGraphicsState()
@@ -122,21 +152,30 @@ final class PetView: NSView {
     }
 
     private func drawFace(in rect: CGRect) {
-        let gaze: CGFloat = animationState.facingDirection == .right ? 0.8 : -0.8
+        let gaze = renderState.horizontalGaze * rect.width * 0.07
         let eyeY = rect.minY + rect.height * 0.47
         let eyeWidth = rect.width * 0.13
         let eyeHeight = rect.height * 0.28
 
         for eyeX in [rect.minX + rect.width * 0.35, rect.minX + rect.width * 0.65] {
+            let openness = renderState.eyeOpenness
             let eyeRect = CGRect(
                 x: eyeX - eyeWidth / 2 + gaze,
-                y: eyeY - eyeHeight / 2,
+                y: eyeY - max(eyeHeight * openness, 1) / 2,
                 width: eyeWidth,
-                height: eyeHeight
+                height: max(eyeHeight * openness, 1)
             )
-            let eye = NSBezierPath(ovalIn: eyeRect)
             NSColor(calibratedRed: 0.06, green: 0.10, blue: 0.19, alpha: 0.96).setFill()
-            eye.fill()
+            if openness < 0.12 {
+                let eyelid = NSBezierPath()
+                eyelid.move(to: CGPoint(x: eyeRect.minX, y: eyeY))
+                eyelid.curve(to: CGPoint(x: eyeRect.maxX, y: eyeY), controlPoint1: CGPoint(x: eyeRect.minX + eyeRect.width * 0.35, y: eyeY - 1.5), controlPoint2: CGPoint(x: eyeRect.maxX - eyeRect.width * 0.35, y: eyeY - 1.5))
+                eyelid.lineWidth = 1.6
+                eyelid.lineCapStyle = .round
+                eyelid.stroke()
+            } else {
+                NSBezierPath(ovalIn: eyeRect).fill()
+            }
 
             let shine = NSBezierPath(ovalIn: CGRect(
                 x: eyeRect.minX + eyeRect.width * 0.20,
@@ -148,32 +187,16 @@ final class PetView: NSView {
             shine.fill()
         }
 
-        let mouth = NSBezierPath()
-        mouth.move(to: CGPoint(x: rect.midX - 2.2 + gaze * 0.25, y: rect.minY + rect.height * 0.34))
-        mouth.line(to: CGPoint(x: rect.midX + 2.2 + gaze * 0.25, y: rect.minY + rect.height * 0.34))
-        mouth.lineWidth = 1.5
-        mouth.lineCapStyle = .round
         NSColor(calibratedRed: 0.06, green: 0.10, blue: 0.19, alpha: 0.9).setStroke()
-        mouth.stroke()
-    }
-
-    private func drawDiagnosticMessage(_ message: String) {
-        let bubble = NSBezierPath(
-            roundedRect: PetLayout.messageRect,
-            xRadius: 8,
-            yRadius: 8
-        )
-        NSColor(calibratedWhite: 1, alpha: 0.92).setFill()
-        bubble.fill()
-        NSColor(calibratedWhite: 0.15, alpha: 0.22).setStroke()
-        bubble.lineWidth = 1
-        bubble.stroke()
-
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 12, weight: .medium),
-            .foregroundColor: NSColor(calibratedWhite: 0.12, alpha: 1)
-        ]
-        let text = NSAttributedString(string: message, attributes: attributes)
-        text.draw(in: PetLayout.messageRect.insetBy(dx: 8, dy: 2))
+        if renderState.mouthOpenness > 0.03 {
+            NSBezierPath(ovalIn: CGRect(x: rect.midX - 3.5, y: rect.minY + rect.height * 0.32 - renderState.mouthOpenness * 3, width: 7, height: 3 + renderState.mouthOpenness * 10)).fill()
+        } else {
+            let mouth = NSBezierPath()
+            mouth.move(to: CGPoint(x: rect.midX - 2.2, y: rect.minY + rect.height * 0.34))
+            mouth.line(to: CGPoint(x: rect.midX + 2.2, y: rect.minY + rect.height * 0.34))
+            mouth.lineWidth = 1.5
+            mouth.lineCapStyle = .round
+            mouth.stroke()
+        }
     }
 }

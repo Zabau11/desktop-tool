@@ -1,8 +1,8 @@
 # ScreenPet
 
 A tiny native macOS proof of concept for a future desktop creature. The current
-version draws a click-through aqua slime that gently patrols near the lower edge
-of the primary screen.
+version draws a click-through aqua slime that quietly rests in the bottom-right
+corner of the primary screen and makes occasional, subtle human-like expressions.
 
 ## Requirements
 
@@ -18,15 +18,8 @@ swift run ScreenPet
 ScreenPet runs as a menu-bar accessory, so it does not appear in the Dock. Use
 the menu-bar control to hide or show the pet, or to quit the application.
 
-ScreenPet also shows temporary input diagnostics in a bubble above the pet:
-`Click detected` for mouse-button presses and `Space pressed` for physical
-Space key presses. The latest message remains visible briefly before fading.
-
-Global Space observation requires Accessibility access. At launch, ScreenPet
-requests permission if needed. If the prompt does not appear, enable ScreenPet
-manually in System Settings > Privacy & Security > Accessibility. The pet
-continues running if access is denied; click monitoring remains active where
-macOS permits it.
+The pet does not monitor clicks or keyboard input and does not require
+Accessibility permission. It honors the system Reduce Motion preference.
 
 ## Test
 
