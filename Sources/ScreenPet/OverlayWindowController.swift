@@ -42,6 +42,10 @@ final class OverlayWindowController {
         }
     }
 
+    func setUserSignal(_ signal: UserSignal) {
+        (panel.contentView as? PetView)?.apply(signal: signal)
+    }
+
     func reposition() {
         movePanel()
     }

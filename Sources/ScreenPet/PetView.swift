@@ -2,8 +2,10 @@ import AppKit
 
 final class PetView: NSView {
     private let animationEngine = PetAnimationEngine(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+    private let colorEngine = PetColorEngine(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     private var idleTimer: Timer?
     private var frameTimer: Timer?
+    private var colorTimer: Timer?
     private var renderState = PetRenderState.neutral
 
     override var isOpaque: Bool { false }
@@ -12,16 +14,26 @@ final class PetView: NSView {
         stopAnimations()
         animationEngine.reset()
         scheduleIdleTimer()
+        scheduleColorTimerIfNeeded()
     }
 
     func stopAnimations() {
         idleTimer?.invalidate()
         frameTimer?.invalidate()
+        colorTimer?.invalidate()
         idleTimer = nil
         frameTimer = nil
+        colorTimer = nil
         animationEngine.reset()
         renderState = .neutral
         needsDisplay = true
+    }
+
+    func apply(signal: UserSignal) {
+        colorEngine.setSignal(signal)
+        needsDisplay = true
+
+        scheduleColorTimerIfNeeded()
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -59,6 +71,27 @@ final class PetView: NSView {
         }
     }
 
+    private func scheduleColorTimerIfNeeded() {
+        colorTimer?.invalidate()
+        guard colorEngine.isAnimating else {
+            colorTimer = nil
+            return
+        }
+
+        colorTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.advanceColorFrame() }
+        }
+    }
+
+    private func advanceColorFrame() {
+        colorEngine.advance(by: 1.0 / 60.0)
+        needsDisplay = true
+        if !colorEngine.isAnimating {
+            colorTimer?.invalidate()
+            colorTimer = nil
+        }
+    }
+
     private func drawSlime() {
         let baseRect = PetLayout.petRect
         let rect = CGRect(
@@ -68,6 +101,7 @@ final class PetView: NSView {
             height: baseRect.height * renderState.bodyScaleY
         )
         let body = slimeBodyPath(in: rect)
+        let palette = colorEngine.palette
 
         NSGraphicsContext.saveGraphicsState()
         let shadow = NSShadow()
@@ -75,17 +109,17 @@ final class PetView: NSView {
         shadow.shadowBlurRadius = 5
         shadow.shadowOffset = CGSize(width: 0, height: -2)
         shadow.set()
-        NSColor(calibratedRed: 0.35, green: 0.88, blue: 0.91, alpha: 0.96).setFill()
+        palette.shadowFill.nsColor.setFill()
         body.fill()
         NSGraphicsContext.restoreGraphicsState()
 
         let bodyGradient = NSGradient(colors: [
-            NSColor(calibratedRed: 0.82, green: 0.98, blue: 0.99, alpha: 0.98),
-            NSColor(calibratedRed: 0.39, green: 0.86, blue: 0.90, alpha: 0.98)
+            palette.gradientTop.nsColor,
+            palette.gradientBottom.nsColor
         ])
         bodyGradient?.draw(in: body, angle: -90)
 
-        NSColor(calibratedRed: 0.12, green: 0.61, blue: 0.65, alpha: 0.95).setStroke()
+        palette.outline.nsColor.setStroke()
         body.lineWidth = 2
         body.stroke()
 
@@ -198,5 +232,11 @@ final class PetView: NSView {
             mouth.lineCapStyle = .round
             mouth.stroke()
         }
+    }
+}
+
+private extension SlimeColor {
+    var nsColor: NSColor {
+        NSColor(calibratedRed: red, green: green, blue: blue, alpha: alpha)
     }
 }
