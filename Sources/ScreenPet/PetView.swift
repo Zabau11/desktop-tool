@@ -43,14 +43,15 @@ final class PetView: NSView {
 
     private func scheduleIdleTimer() {
         idleTimer?.invalidate()
-        idleTimer = Timer.scheduledTimer(withTimeInterval: max(0.01, animationEngine.timeUntilNextEvent), repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.beginAnimationIfNeeded() }
+        let delay = max(0.01, animationEngine.timeUntilNextEvent)
+        idleTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.beginAnimationIfNeeded(after: delay) }
         }
     }
 
-    private func beginAnimationIfNeeded() {
+    private func beginAnimationIfNeeded(after idleDelay: TimeInterval) {
         idleTimer = nil
-        animationEngine.advance(by: 0.001)
+        animationEngine.advance(by: idleDelay + 0.001)
         renderState = animationEngine.state
         needsDisplay = true
         guard animationEngine.isAnimating else { scheduleIdleTimer(); return }
