@@ -1,8 +1,8 @@
 # ScreenPet
 
 A tiny native macOS proof of concept for a future desktop creature. The current
-version draws a click-through blob pet that gently patrols near the lower edge of
-the primary screen.
+version draws a click-through aqua slime that gently patrols near the lower edge
+of the primary screen.
 
 ## Requirements
 

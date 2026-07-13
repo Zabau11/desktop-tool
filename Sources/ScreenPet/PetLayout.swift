@@ -15,7 +15,7 @@ struct PetAnimationState: Equatable {
 
 enum PetLayout {
     static let panelSize = CGSize(width: 170, height: 86)
-    static let petRect = CGRect(x: 43, y: 10, width: 84, height: 44)
+    static let petRect = CGRect(x: 37, y: 10, width: 96, height: 49)
     static let messageRect = CGRect(x: 8, y: 61, width: 154, height: 20)
     static let petBottomInset: CGFloat = 10
     static let patrolDistance: CGFloat = 140
