@@ -4,13 +4,13 @@ struct PetRenderState: Equatable {
     var eyeOpenness: CGFloat = 1
     var horizontalGaze: CGFloat = 0
     var mouthOpenness: CGFloat = 0
-    var bodyScaleX: CGFloat = 1
-    var bodyScaleY: CGFloat = 1
+    var squashTarget: CGFloat = 0
+    var leanTarget: CGFloat = 0
 
     static let neutral = PetRenderState()
 
     var gaze: CGFloat { horizontalGaze }
-    var bodyScale: CGSize { CGSize(width: bodyScaleX, height: bodyScaleY) }
+    var bodyScale: CGSize { CGSize(width: 1 + squashTarget * 0.06, height: 1 - squashTarget * 0.07) }
 }
 
 /// A small, clock-independent animation state machine. The random source is
@@ -128,16 +128,16 @@ final class PetAnimationEngine {
             let cycle = min(0.999, progress * CGFloat(animation.repeats))
             let cycleProgress = cycle - floor(cycle)
             let openness = cycleProgress < 0.5 ? 1 - cycleProgress * 2 : (cycleProgress - 0.5) * 2
-            state = PetRenderState(eyeOpenness: openness, horizontalGaze: 0, mouthOpenness: 0, bodyScaleX: 1, bodyScaleY: 1)
+            state = PetRenderState(eyeOpenness: openness, horizontalGaze: 0, mouthOpenness: 0, squashTarget: reduceMotion ? 0 : 0.08, leanTarget: 0)
         case .glance:
             let amount = progress < 0.5 ? progress * 2 : (1 - progress) * 2
-            state = PetRenderState(eyeOpenness: 1, horizontalGaze: animation.direction * amount, mouthOpenness: 0, bodyScaleX: 1, bodyScaleY: 1)
+            state = PetRenderState(eyeOpenness: 1, horizontalGaze: animation.direction * amount, mouthOpenness: 0, squashTarget: 0, leanTarget: reduceMotion ? 0 : animation.direction * 0.12 * amount)
         case .breathing:
             let amount = sin(progress * .pi)
-            state = PetRenderState(eyeOpenness: 1, horizontalGaze: 0, mouthOpenness: 0, bodyScaleX: reduceMotion ? 1 : 1 + 0.025 * amount, bodyScaleY: reduceMotion ? 1 : 1 - 0.02 * amount)
+            state = PetRenderState(eyeOpenness: 1, horizontalGaze: 0, mouthOpenness: 0, squashTarget: reduceMotion ? 0 : -0.12 * amount, leanTarget: 0)
         case .yawn:
             let amount = sin(progress * .pi)
-            state = PetRenderState(eyeOpenness: 1 - 0.5 * amount, horizontalGaze: 0, mouthOpenness: 0.55 * amount, bodyScaleX: reduceMotion ? 1 : 1 + 0.025 * amount, bodyScaleY: reduceMotion ? 1 : 1 - 0.035 * amount)
+            state = PetRenderState(eyeOpenness: 1 - 0.5 * amount, horizontalGaze: 0, mouthOpenness: 0.55 * amount, squashTarget: reduceMotion ? 0 : 0.32 * amount, leanTarget: 0)
         }
     }
 

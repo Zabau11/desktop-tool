@@ -23,8 +23,8 @@ struct PetAnimationEngineTests {
         let engine = PetAnimationEngine(random: { 0 }, reduceMotion: true)
         engine.advance(by: 35)
         engine.advance(by: 0.9)
-        #expect(engine.state.bodyScaleX == 1)
-        #expect(engine.state.bodyScaleY == 1)
+        #expect(engine.state.squashTarget == 0)
+        #expect(engine.state.leanTarget == 0)
         #expect(engine.state.mouthOpenness > 0)
     }
 
@@ -36,8 +36,8 @@ struct PetAnimationEngineTests {
             #expect((0...1).contains(engine.state.eyeOpenness))
             #expect((-1...1).contains(engine.state.horizontalGaze))
             #expect((0...1).contains(engine.state.mouthOpenness))
-            #expect((0.95...1.05).contains(engine.state.bodyScaleX))
-            #expect((0.95...1.05).contains(engine.state.bodyScaleY))
+            #expect((-1...1).contains(engine.state.squashTarget))
+            #expect((-1...1).contains(engine.state.leanTarget))
         }
     }
 
@@ -49,7 +49,7 @@ struct PetAnimationEngineTests {
         engine.advance(by: 0.9)
         #expect(engine.state.mouthOpenness > 0)
         #expect(engine.state.eyeOpenness < 1)
-        #expect(engine.state.bodyScaleX > 1)
+        #expect(engine.state.squashTarget > 0)
     }
 
     @Test

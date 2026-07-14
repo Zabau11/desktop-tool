@@ -3,9 +3,10 @@ import AppKit
 final class PetView: NSView {
     private let animationEngine = PetAnimationEngine(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     private let colorEngine = PetColorEngine(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+    private let springEngine = SlimeSpringEngine(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     private var idleTimer: Timer?
-    private var frameTimer: Timer?
-    private var colorTimer: Timer?
+    private var renderTimer: Timer?
+    private var lastRenderTime: TimeInterval?
     private var renderState = PetRenderState.neutral
 
     override var isOpaque: Bool { false }
@@ -13,27 +14,30 @@ final class PetView: NSView {
     func startAnimations() {
         stopAnimations()
         animationEngine.reset()
+        springEngine.reset()
         scheduleIdleTimer()
-        scheduleColorTimerIfNeeded()
     }
 
     func stopAnimations() {
         idleTimer?.invalidate()
-        frameTimer?.invalidate()
-        colorTimer?.invalidate()
+        renderTimer?.invalidate()
         idleTimer = nil
-        frameTimer = nil
-        colorTimer = nil
+        renderTimer = nil
+        lastRenderTime = nil
         animationEngine.reset()
+        springEngine.reset()
         renderState = .neutral
         needsDisplay = true
     }
 
     func apply(signal: UserSignal) {
+        let changed = signal != colorEngine.signal
         colorEngine.setSignal(signal)
+        if changed {
+            springEngine.impulse(compression: 0.50)
+        }
         needsDisplay = true
-
-        scheduleColorTimerIfNeeded()
+        scheduleRenderTimerIfNeeded()
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -51,63 +55,57 @@ final class PetView: NSView {
 
     private func beginAnimationIfNeeded(after idleDelay: TimeInterval) {
         idleTimer = nil
-        animationEngine.advance(by: idleDelay + 0.001)
-        renderState = animationEngine.state
+        animationEngine.advance(by: idleDelay)
+        updateSpringTarget()
         needsDisplay = true
-        guard animationEngine.isAnimating else { scheduleIdleTimer(); return }
-        frameTimer?.invalidate()
-        frameTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.advanceAnimationFrame() }
+        scheduleRenderTimerIfNeeded()
+    }
+
+    private func scheduleRenderTimerIfNeeded() {
+        guard renderTimer == nil,
+              animationEngine.isAnimating || colorEngine.isAnimating || springEngine.isAnimating else { return }
+        lastRenderTime = Date.timeIntervalSinceReferenceDate
+        renderTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.advanceRenderFrame() }
         }
     }
 
-    private func advanceAnimationFrame() {
-        animationEngine.advance(by: 1.0 / 30.0)
-        renderState = animationEngine.state
+    private func advanceRenderFrame() {
+        let now = Date.timeIntervalSinceReferenceDate
+        let delta = max(0, now - (lastRenderTime ?? now))
+        lastRenderTime = now
+        animationEngine.advance(by: delta)
+        colorEngine.advance(by: delta)
+        updateSpringTarget()
+        springEngine.advance(by: delta)
         needsDisplay = true
-        if !animationEngine.isAnimating {
-            frameTimer?.invalidate()
-            frameTimer = nil
+
+        if !animationEngine.isAnimating && !colorEngine.isAnimating && !springEngine.isAnimating {
+            renderTimer?.invalidate()
+            renderTimer = nil
+            lastRenderTime = nil
             scheduleIdleTimer()
         }
     }
 
-    private func scheduleColorTimerIfNeeded() {
-        colorTimer?.invalidate()
-        guard colorEngine.isAnimating else {
-            colorTimer = nil
-            return
-        }
-
-        colorTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.advanceColorFrame() }
-        }
-    }
-
-    private func advanceColorFrame() {
-        colorEngine.advance(by: 1.0 / 60.0)
-        needsDisplay = true
-        if !colorEngine.isAnimating {
-            colorTimer?.invalidate()
-            colorTimer = nil
-        }
+    private func updateSpringTarget() {
+        renderState = animationEngine.state
+        springEngine.setTargets(
+            squashTarget: renderState.squashTarget,
+            leanTarget: renderState.leanTarget
+        )
     }
 
     private func drawSlime() {
         let baseRect = PetLayout.petRect
-        let rect = CGRect(
-            x: baseRect.midX - baseRect.width * renderState.bodyScaleX / 2,
-            y: baseRect.minY,
-            width: baseRect.width * renderState.bodyScaleX,
-            height: baseRect.height * renderState.bodyScaleY
-        )
-        let body = slimeBodyPath(in: rect)
+        let geometry = SlimeShapeGeometry.calculate(in: baseRect, spring: springEngine.state)
+        let body = slimeBodyPath(from: geometry)
         let palette = colorEngine.palette
 
         NSGraphicsContext.saveGraphicsState()
         let shadow = NSShadow()
         shadow.shadowColor = NSColor.black.withAlphaComponent(0.18)
-        shadow.shadowBlurRadius = 5
+        shadow.shadowBlurRadius = 5 + max(0, springEngine.state.compression) * 1.5
         shadow.shadowOffset = CGSize(width: 0, height: -2)
         shadow.set()
         palette.shadowFill.nsColor.setFill()
@@ -124,75 +122,50 @@ final class PetView: NSView {
         body.lineWidth = 2
         body.stroke()
 
-        drawBodyHighlights(in: rect)
-        drawFace(in: rect)
+        drawBodyHighlights(in: geometry)
+        drawFace(in: baseRect, spring: springEngine.state)
     }
 
-    private func slimeBodyPath(in rect: CGRect) -> NSBezierPath {
+    private func slimeBodyPath(from geometry: SlimeBezierGeometry) -> NSBezierPath {
         let path = NSBezierPath()
-        path.move(to: CGPoint(x: rect.minX + rect.width * 0.08, y: rect.minY + rect.height * 0.08))
-        path.curve(
-            to: CGPoint(x: rect.minX + rect.width * 0.03, y: rect.minY + rect.height * 0.34),
-            controlPoint1: CGPoint(x: rect.minX + rect.width * 0.03, y: rect.minY + rect.height * 0.11),
-            controlPoint2: CGPoint(x: rect.minX + rect.width * 0.02, y: rect.minY + rect.height * 0.22)
-        )
-        path.curve(
-            to: CGPoint(x: rect.midX, y: rect.maxY),
-            controlPoint1: CGPoint(x: rect.minX + rect.width * 0.08, y: rect.minY + rect.height * 0.76),
-            controlPoint2: CGPoint(x: rect.minX + rect.width * 0.26, y: rect.maxY)
-        )
-        path.curve(
-            to: CGPoint(x: rect.maxX - rect.width * 0.03, y: rect.minY + rect.height * 0.34),
-            controlPoint1: CGPoint(x: rect.maxX - rect.width * 0.26, y: rect.maxY),
-            controlPoint2: CGPoint(x: rect.maxX - rect.width * 0.08, y: rect.minY + rect.height * 0.76)
-        )
-        path.curve(
-            to: CGPoint(x: rect.maxX - rect.width * 0.08, y: rect.minY + rect.height * 0.08),
-            controlPoint1: CGPoint(x: rect.maxX - rect.width * 0.02, y: rect.minY + rect.height * 0.22),
-            controlPoint2: CGPoint(x: rect.maxX - rect.width * 0.03, y: rect.minY + rect.height * 0.11)
-        )
-        path.curve(
-            to: CGPoint(x: rect.minX + rect.width * 0.08, y: rect.minY + rect.height * 0.08),
-            controlPoint1: CGPoint(x: rect.maxX - rect.width * 0.24, y: rect.minY),
-            controlPoint2: CGPoint(x: rect.minX + rect.width * 0.24, y: rect.minY)
-        )
+        path.move(to: geometry.bottomLeft)
+        path.curve(to: geometry.leftShoulder, controlPoint1: geometry.controlPoints[0], controlPoint2: geometry.controlPoints[1])
+        path.curve(to: geometry.apex, controlPoint1: geometry.controlPoints[2], controlPoint2: geometry.controlPoints[3])
+        path.curve(to: geometry.rightShoulder, controlPoint1: geometry.controlPoints[4], controlPoint2: geometry.controlPoints[5])
+        path.curve(to: geometry.bottomRight, controlPoint1: geometry.rightShoulder, controlPoint2: geometry.bottomRight)
+        path.line(to: geometry.bottomLeft)
         path.close()
         return path
     }
 
-    private func drawBodyHighlights(in rect: CGRect) {
+    private func drawBodyHighlights(in geometry: SlimeBezierGeometry) {
         let upperHighlight = NSBezierPath()
-        upperHighlight.move(to: CGPoint(x: rect.minX + rect.width * 0.20, y: rect.minY + rect.height * 0.77))
-        upperHighlight.curve(
-            to: CGPoint(x: rect.minX + rect.width * 0.37, y: rect.minY + rect.height * 0.91),
-            controlPoint1: CGPoint(x: rect.minX + rect.width * 0.24, y: rect.minY + rect.height * 0.87),
-            controlPoint2: CGPoint(x: rect.minX + rect.width * 0.31, y: rect.minY + rect.height * 0.91)
-        )
+        let upperStart = CGPoint(x: geometry.leftShoulder.x + (geometry.apex.x - geometry.leftShoulder.x) * 0.42, y: geometry.leftShoulder.y + (geometry.apex.y - geometry.leftShoulder.y) * 0.42)
+        let upperEnd = CGPoint(x: geometry.leftShoulder.x + (geometry.apex.x - geometry.leftShoulder.x) * 0.68, y: geometry.leftShoulder.y + (geometry.apex.y - geometry.leftShoulder.y) * 0.68)
+        upperHighlight.move(to: upperStart)
+        upperHighlight.curve(to: upperEnd, controlPoint1: upperStart, controlPoint2: upperEnd)
         upperHighlight.lineWidth = 4
         upperHighlight.lineCapStyle = .round
         NSColor.white.withAlphaComponent(0.72).setStroke()
         upperHighlight.stroke()
 
         let lowerHighlight = NSBezierPath()
-        lowerHighlight.move(to: CGPoint(x: rect.minX + rect.width * 0.11, y: rect.minY + rect.height * 0.14))
-        lowerHighlight.curve(
-            to: CGPoint(x: rect.minX + rect.width * 0.22, y: rect.minY + rect.height * 0.10),
-            controlPoint1: CGPoint(x: rect.minX + rect.width * 0.14, y: rect.minY + rect.height * 0.10),
-            controlPoint2: CGPoint(x: rect.minX + rect.width * 0.18, y: rect.minY + rect.height * 0.09)
-        )
+        lowerHighlight.move(to: geometry.bottomLeft)
+        lowerHighlight.curve(to: CGPoint(x: geometry.bottomLeft.x + (geometry.bottomRight.x - geometry.bottomLeft.x) * 0.14, y: geometry.bottomLeft.y + 2), controlPoint1: geometry.bottomLeft, controlPoint2: geometry.bottomLeft)
         lowerHighlight.lineWidth = 2
         lowerHighlight.lineCapStyle = .round
         NSColor.white.withAlphaComponent(0.46).setStroke()
         lowerHighlight.stroke()
     }
 
-    private func drawFace(in rect: CGRect) {
-        let gaze = renderState.horizontalGaze * rect.width * 0.07
-        let eyeY = rect.minY + rect.height * 0.47
-        let eyeWidth = rect.width * 0.13
-        let eyeHeight = rect.height * 0.28
+    private func drawFace(in baseRect: CGRect, spring: SlimeSpringState) {
+        let faceRect = baseRect.offsetBy(dx: spring.lean * 1.6, dy: spring.lean * 0.8)
+        let gaze = renderState.horizontalGaze * faceRect.width * 0.07
+        let eyeY = faceRect.minY + faceRect.height * 0.47
+        let eyeWidth = faceRect.width * 0.13
+        let eyeHeight = faceRect.height * 0.28
 
-        for eyeX in [rect.minX + rect.width * 0.35, rect.minX + rect.width * 0.65] {
+        for eyeX in [faceRect.minX + faceRect.width * 0.35, faceRect.minX + faceRect.width * 0.65] {
             let openness = renderState.eyeOpenness
             let eyeRect = CGRect(
                 x: eyeX - eyeWidth / 2 + gaze,
@@ -224,11 +197,11 @@ final class PetView: NSView {
 
         NSColor(calibratedRed: 0.06, green: 0.10, blue: 0.19, alpha: 0.9).setStroke()
         if renderState.mouthOpenness > 0.03 {
-            NSBezierPath(ovalIn: CGRect(x: rect.midX - 3.5, y: rect.minY + rect.height * 0.32 - renderState.mouthOpenness * 3, width: 7, height: 3 + renderState.mouthOpenness * 10)).fill()
+            NSBezierPath(ovalIn: CGRect(x: faceRect.midX - 3.5, y: faceRect.minY + faceRect.height * 0.32 - renderState.mouthOpenness * 3, width: 7, height: 3 + renderState.mouthOpenness * 10)).fill()
         } else {
             let mouth = NSBezierPath()
-            mouth.move(to: CGPoint(x: rect.midX - 2.2, y: rect.minY + rect.height * 0.34))
-            mouth.line(to: CGPoint(x: rect.midX + 2.2, y: rect.minY + rect.height * 0.34))
+            mouth.move(to: CGPoint(x: faceRect.midX - 2.2, y: faceRect.minY + faceRect.height * 0.34))
+            mouth.line(to: CGPoint(x: faceRect.midX + 2.2, y: faceRect.minY + faceRect.height * 0.34))
             mouth.lineWidth = 1.5
             mouth.lineCapStyle = .round
             mouth.stroke()
