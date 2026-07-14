@@ -40,4 +40,24 @@ struct PetAnimationEngineTests {
             #expect((0.95...1.05).contains(engine.state.bodyScaleY))
         }
     }
+
+    @Test
+    func yawnWinsWhenAllBehaviorsAreDue() {
+        let engine = PetAnimationEngine(random: { 0 })
+        engine.advance(by: 35)
+        #expect(engine.state.mouthOpenness == 0)
+        engine.advance(by: 0.9)
+        #expect(engine.state.mouthOpenness > 0)
+        #expect(engine.state.eyeOpenness < 1)
+        #expect(engine.state.bodyScaleX > 1)
+    }
+
+    @Test
+    func deferredEventsAreRescheduledAfterAnActiveAnimation() {
+        let engine = PetAnimationEngine(random: { 0 })
+        engine.advance(by: 35)
+        engine.advance(by: 1.8)
+        #expect(!engine.isAnimating)
+        #expect(engine.timeUntilNextEvent >= 4)
+    }
 }

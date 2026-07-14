@@ -8,6 +8,9 @@ struct PetRenderState: Equatable {
     var bodyScaleY: CGFloat = 1
 
     static let neutral = PetRenderState()
+
+    var gaze: CGFloat { horizontalGaze }
+    var bodyScale: CGSize { CGSize(width: bodyScaleX, height: bodyScaleY) }
 }
 
 /// A small, clock-independent animation state machine. The random source is
@@ -71,7 +74,7 @@ final class PetAnimationEngine {
             if current.elapsed >= current.duration {
                 active = nil
                 state = .neutral
-                reschedule(current.behavior)
+                rescheduleCompletedAndDeferred(current.behavior)
             }
             return
         }
@@ -102,13 +105,20 @@ final class PetAnimationEngine {
         }
     }
 
-    private func reschedule(_ behavior: Behavior) {
+    private func rescheduleCompletedAndDeferred(_ behavior: Behavior) {
         switch behavior {
         case .blink: nextBlink = now + Self.interval(in: 4...9, random: random)
         case .glance: nextGlance = now + Self.interval(in: 10...20, random: random)
         case .breathing: nextBreathing = now + Self.interval(in: 12...24, random: random)
         case .yawn: nextYawn = now + Self.interval(in: 35...70, random: random)
         }
+
+        // An event that became due while another animation was active is
+        // deferred as a fresh interval, rather than firing in a burst.
+        if behavior != .blink && now >= nextBlink { nextBlink = now + Self.interval(in: 4...9, random: random) }
+        if behavior != .glance && now >= nextGlance { nextGlance = now + Self.interval(in: 10...20, random: random) }
+        if behavior != .breathing && now >= nextBreathing { nextBreathing = now + Self.interval(in: 12...24, random: random) }
+        if behavior != .yawn && now >= nextYawn { nextYawn = now + Self.interval(in: 35...70, random: random) }
     }
 
     private func render(_ animation: Active) {
